@@ -1,11 +1,11 @@
 #!/bin/bash
 
-echo "🛠️  Setting up 'resize' image tool..."
+echo "🛠️  Setting up magic-resize..."
 
 # --- Step 1: Set up script location and download ---
 TOOL_DIR="$HOME/.resize_tool"
 SCRIPT_PATH="$TOOL_DIR/resize"
-SCRIPT_URL="https://raw.githubusercontent.com/billybjork/media-utilities/main/images/smart_letterbox.sh"
+SCRIPT_URL="https://raw.githubusercontent.com/billybjork/media-utilities/main/images/magic-resize/magic_resize.sh"
 
 mkdir -p "$TOOL_DIR"
 
@@ -18,7 +18,7 @@ chmod +x "$SCRIPT_PATH"
 
 # --- Step 2: Add alias to shell config ---
 SHELL_RC="$HOME/.zshrc"
-ALIAS_CMD='alias resize="$HOME/.resize_tool/resize"'
+ALIAS_CMD='alias resize="$HOME/.magic-resize/resize"'
 
 if ! grep -Fxq "$ALIAS_CMD" "$SHELL_RC"; then
   echo "$ALIAS_CMD" >> "$SHELL_RC"
@@ -57,3 +57,5 @@ fi
 # --- Step 4: Finalize ---
 source "$SHELL_RC"
 echo "🎉 Setup complete! You can now run: resize /path/to/image.jpg"
+echo "To specify a target aspect ratio, include the flag --WxH, such as "--9x16""
+echo "Supported aspect ratios are 9x16, 4x5, 1x1, and 16x9"
