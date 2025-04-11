@@ -1,129 +1,98 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "🛠️  Setting up the 'resize' command..."
+echo "🛠️  Installing the 'resize' command…"
 
-# --- Define ALL necessary variables FIRST ---
-TOOL_NAME="smart_letterbox.sh"       # Actual script filename
-TOOL_DIR="$HOME/.smart_letterbox"    # Directory to store the script
-SCRIPT_PATH="$TOOL_DIR/$TOOL_NAME"   # Full path to the script
-ALIAS_TARGET_PATH="$SCRIPT_PATH"     # What the alias should point to
-ALIAS_NAME="resize"                  # The name of the alias command
+# ---------------------------------------------------------------------
+# 1.  Where we keep the real script
+# ---------------------------------------------------------------------
+TOOL_DIR="$HOME/.magic_resize"                 # private folder
+TOOL_NAME="magic_resize.sh"
+SCRIPT_PATH="$TOOL_DIR/$TOOL_NAME"
 SCRIPT_URL="https://raw.githubusercontent.com/billybjork/media-utilities/main/images/magic-resize/magic_resize.sh"
 
-# --- Step 1: Set up script location and download ---
-echo "Creating tool directory: $TOOL_DIR"
-mkdir -p "$TOOL_DIR" || { echo "❌ Failed to create directory '$TOOL_DIR'."; exit 1; }
+# ---------------------------------------------------------------------
+# 2.  Pick a writable directory that is already on $PATH
+#     (priority: ~/.local/bin → /usr/local/bin → /opt/homebrew/bin)
+# ---------------------------------------------------------------------
+BIN_DIR=""
+for d in "$HOME/.local/bin" "/usr/local/bin" "/opt/homebrew/bin"; do
+  if [[ ":$PATH:" == *":$d:"* ]] && [[ -w "$d" ]]; then
+    BIN_DIR="$d" && break
+  fi
+done
 
-echo "Downloading script..."
-# Download script using curl
-curl -fsSL "$SCRIPT_URL" -o "$SCRIPT_PATH" || {
-  echo "❌ Failed to download script from '$SCRIPT_URL'."
-  echo "   Please check the URL and your internet connection."
-  exit 1;
-}
+# If none were both on PATH *and* writable, fall back to ~/.local/bin
+if [[ -z $BIN_DIR ]]; then
+  BIN_DIR="$HOME/.local/bin"
+  mkdir -p "$BIN_DIR"
+  export PATH="$BIN_DIR:$PATH"
+  echo "🔧 Added $BIN_DIR to PATH for this session (shells you open later will also see it if they inherit PATH)."
+fi
 
-# Make the downloaded script executable
-chmod +x "$SCRIPT_PATH" || {
-  echo "❌ Failed to make script executable at '$SCRIPT_PATH'."
-  exit 1;
-}
+echo "📂 Wrapper will be installed to: $BIN_DIR"
+
+# ---------------------------------------------------------------------
+# 3.  Fetch / refresh the real script
+# ---------------------------------------------------------------------
+echo "📥 Downloading core script to $SCRIPT_PATH"
+mkdir -p "$TOOL_DIR"
+curl -fsSL "$SCRIPT_URL" -o "$SCRIPT_PATH"
+chmod +x "$SCRIPT_PATH"
 echo "✅ Script downloaded and made executable."
 
+# ---------------------------------------------------------------------
+# 4.  Create (or refresh) the tiny wrapper on PATH
+# ---------------------------------------------------------------------
+WRAPPER_PATH="$BIN_DIR/resize"
+cat >"$WRAPPER_PATH" <<EOF
+#!/usr/bin/env bash
+exec "$SCRIPT_PATH" "\$@"
+EOF
+chmod +x "$WRAPPER_PATH"
+echo "✅ Wrapper installed at $WRAPPER_PATH"
 
-# --- Step 2: Add alias to shell config ---
-# Define the alias command string using the variables defined above
-ALIAS_COMMAND="alias $ALIAS_NAME='$ALIAS_TARGET_PATH'"
-CONFIG_CHANGED=0
+# Flush the shell’s command cache so “resize” works right now
+command -v hash   &>/dev/null && hash   -r   # bash, zsh
+command -v rehash &>/dev/null && rehash      # tcsh, fish, etc.
 
-# Function to add alias if not present
-add_alias() {
-    local rc_file="$1"
-    local shell_name="$2"
-    if [ -f "$rc_file" ]; then
-      # Check specifically for the CORRECT alias command string
-      if ! grep -Fxq "$ALIAS_COMMAND" "$rc_file"; then
-        # Remove any OLD incorrect aliases or previous versions first
-        # This targets lines starting with 'alias resize=' regardless of path for simplicity
-        # Use sed -i.bak for macOS compatibility
-        sed -i.bak "/^alias ${ALIAS_NAME}=/d" "$rc_file" &>/dev/null
-
-        echo "" >> "$rc_file" # Add newline for separation
-        echo "# Alias for smart image resize tool ($TOOL_NAME)" >> "$rc_file"
-        echo "$ALIAS_COMMAND" >> "$rc_file" # Add the CORRECT alias
-        echo "✅ Alias '$ALIAS_NAME' added/corrected in $rc_file"
-        CONFIG_CHANGED=1
-      else
-        # If the correct alias is already there, we don't need to do anything.
-        echo "✅ Correct alias '$ALIAS_NAME' already exists in $rc_file"
-      fi
-    else
-        echo "ℹ️ $rc_file not found (normal if you primarily use a different shell than $shell_name)."
-    fi
-}
-
-# Call the function for relevant shell configuration files
-add_alias "$HOME/.zshrc" "Zsh"
-add_alias "$HOME/.bashrc" "Bash"
-if [ ! -f "$HOME/.bashrc" ] && [ -f "$HOME/.bash_profile" ]; then
-    add_alias "$HOME/.bash_profile" "Bash Profile"
-fi
-
-
-# --- Step 3: Check and Install ImageMagick via Homebrew ---
-echo "Checking for ImageMagick..."
+# ---------------------------------------------------------------------
+# 5.  Make sure ImageMagick exists (install Homebrew first if needed)
+# ---------------------------------------------------------------------
+echo "🔍 Checking for ImageMagick (magick/convert)…"
 if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; then
-  echo "⚠️ ImageMagick not found. This tool requires ImageMagick to function."
-  
-  # Check for Homebrew command
+  echo "⚠️  ImageMagick not found. Attempting automatic install."
+
+  # Install (or locate) Homebrew
   if ! command -v brew >/dev/null 2>&1; then
-    echo "🍺 Homebrew package manager not found. Attempting to install Homebrew..."
-    # Install Homebrew
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
-      echo "❌ Failed to install Homebrew automatically."
-      echo "   Please visit https://brew.sh for manual installation instructions."
-      echo "   You will then need to run 'brew install imagemagick' manually."
-      exit 1; # Exit if Homebrew install fails
-    }
-     # Add Homebrew to PATH for the current script execution if possible
-     if [[ "$(uname -m)" == "arm64" ]]; then # Apple Silicon
-       export PATH="/opt/homebrew/bin:$PATH"
-     else # Intel
-       export PATH="/usr/local/bin:$PATH"
-     fi
-     echo "✅ Homebrew installed."
+    echo "🍺 Homebrew not found – installing…"
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Add brew to PATH for this run
+    if [[ "$(uname -m)" == "arm64" ]]; then   # Apple Silicon
+      export PATH="/opt/homebrew/bin:$PATH"
+    else                                      # Intel
+      export PATH="/usr/local/bin:$PATH"
+    fi
+    echo "✅ Homebrew installed."
   else
-     echo "🍺 Homebrew found."
+    echo "🍺 Homebrew already present."
   fi
 
-  # Now install ImageMagick using Homebrew
-  echo "📦 Installing ImageMagick via Homebrew..."
-  brew install imagemagick || {
-    echo "❌ Failed to install ImageMagick using Homebrew."
-    echo "   You may need to run 'brew update' first, or check 'brew doctor'."
-    echo "   Try running 'brew install imagemagick' manually."
-    exit 1; # Exit if ImageMagick install fails
-  }
-  echo "✅ ImageMagick installed via Homebrew!"
+  echo "📦 Installing ImageMagick via Homebrew…"
+  brew install imagemagick
+  echo "✅ ImageMagick installed."
 else
-  echo "✅ ImageMagick is already installed."
+  echo "✅ ImageMagick already available."
 fi
 
-
-# --- Step 4: Finalize ---
+# ---------------------------------------------------------------------
+# 6.  Done!
+# ---------------------------------------------------------------------
 echo ""
-echo "🎉 Setup complete!"
-if [ "$CONFIG_CHANGED" -eq 1 ]; then
-    echo "   IMPORTANT: Alias was added/updated. To activate the '$ALIAS_NAME' command,"
-    echo "   please CLOSE and REOPEN your terminal window, or run *one* of these:"
-    [ -f "$HOME/.zshrc" ] && echo "     source ~/.zshrc"
-    [ -f "$HOME/.bashrc" ] && echo "     source ~/.bashrc"
-    [ ! -f "$HOME/.bashrc" ] && [ -f "$HOME/.bash_profile" ] && echo "     source ~/.bash_profile"
-else
-     echo "   Alias status checked. If the command isn't working, try restarting your terminal"
-     echo "   or ensure the correct alias exists in your shell config file (~/.zshrc or ~/.bashrc)."
-fi
-echo "   You can then run the command from any directory, e.g.:"
-echo "     $ALIAS_NAME my_image.jpg"
-echo "     $ALIAS_NAME --1x1 my_folder/"
+echo "🎉 Setup complete!  You can use the command immediately:"
+echo "   resize my_image.jpg"
+echo "   resize --1x1 my_folder/"
+echo ""
+echo "No need to restart or run 'source'. Have fun! 🚀"
 
 exit 0
