@@ -17,15 +17,34 @@ curl -fsSL "$SCRIPT_URL" -o "$SCRIPT_PATH" || {
 chmod +x "$SCRIPT_PATH"
 
 # --- Step 2: Add alias to shell config ---
-SHELL_RC="$HOME/.zshrc"
-ALIAS_CMD='alias resize="$HOME/.magic-resize/resize"'
+# Define the alias command string
+ALIAS_COMMAND="alias $ALIAS_NAME='$ALIAS_TARGET_PATH'" # Uses the variable!
+CONFIG_CHANGED=0
 
-if ! grep -Fxq "$ALIAS_CMD" "$SHELL_RC"; then
-  echo "$ALIAS_CMD" >> "$SHELL_RC"
-  echo "✅ Alias 'resize' added to $SHELL_RC"
-else
-  echo "ℹ️ Alias already exists in $SHELL_RC"
-fi
+# Function to add alias if not present
+add_alias() {
+    local rc_file="$1"
+    local shell_name="$2"
+    if [ -f "$rc_file" ]; then
+      # Check specifically for the CORRECT alias command string
+      if ! grep -Fxq "$ALIAS_COMMAND" "$rc_file"; then
+        # Optional: Remove any OLD incorrect alias definitions first
+        # Use sed to delete lines containing 'alias resize=' that point to the old path (use a unique part of the old path)
+        # Be careful with sed -i on macOS vs Linux if compatibility is needed, but for direct user run, this might be okay:
+        sed -i.bak "/alias ${ALIAS_NAME}=.*magic-resize/d" "$rc_file"
+
+        echo "" >> "$rc_file" # Add newline for separation
+        echo "# Alias for smart image resize tool ($TOOL_NAME)" >> "$rc_file"
+        echo "$ALIAS_COMMAND" >> "$rc_file" # Add the CORRECT alias
+        echo "✅ Alias '$ALIAS_NAME' added/corrected in $rc_file"
+        CONFIG_CHANGED=1
+      else
+        echo "✅ Correct alias '$ALIAS_NAME' already exists in $rc_file"
+      fi
+    else
+        echo "ℹ️ $rc_file not found (normal if you primarily use $shell_name)."
+    fi
+}
 
 # --- Step 3: Check if ImageMagick is installed ---
 if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; then
