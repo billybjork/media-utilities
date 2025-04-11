@@ -74,7 +74,6 @@ else
 fi
 
 # --- Step 4: Finalize ---
-source "$SHELL_RC"
 echo "🎉 Setup complete! You can now run: resize /path/to/image.jpg"
-echo "To specify a target aspect ratio, include the flag --WxH, such as "--9x16""
-echo "Supported aspect ratios are 9x16, 4x5, 1x1, and 16x9"
+echo "👀 To specify a target aspect ratio, include the flag --WxH, such as "--9x16""
+echo "ℹ️ Supported aspect ratios are 9x16, 4x5, 1x1, and 16x9"
