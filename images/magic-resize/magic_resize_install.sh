@@ -6,14 +6,13 @@ echo "🛠️  Installing the 'resize' command…"
 # ---------------------------------------------------------------------
 # 1.  Where we keep the real script
 # ---------------------------------------------------------------------
-TOOL_DIR="$HOME/.magic_resize"                 # private folder
+TOOL_DIR="$HOME/.magic_resize"
 TOOL_NAME="magic_resize.sh"
 SCRIPT_PATH="$TOOL_DIR/$TOOL_NAME"
 SCRIPT_URL="https://raw.githubusercontent.com/billybjork/media-utilities/main/images/magic-resize/magic_resize.sh"
 
 # ---------------------------------------------------------------------
-# 2.  Pick a writable directory that is already on $PATH
-#     (priority: ~/.local/bin → /usr/local/bin → /opt/homebrew/bin)
+# 2.  Pick (or create) a writable dir that is already on $PATH
 # ---------------------------------------------------------------------
 BIN_DIR=""
 for d in "$HOME/.local/bin" "/usr/local/bin" "/opt/homebrew/bin"; do
@@ -21,15 +20,12 @@ for d in "$HOME/.local/bin" "/usr/local/bin" "/opt/homebrew/bin"; do
     BIN_DIR="$d" && break
   fi
 done
-
-# If none were both on PATH *and* writable, fall back to ~/.local/bin
 if [[ -z $BIN_DIR ]]; then
   BIN_DIR="$HOME/.local/bin"
   mkdir -p "$BIN_DIR"
   export PATH="$BIN_DIR:$PATH"
-  echo "🔧 Added $BIN_DIR to PATH for this session (shells you open later will also see it if they inherit PATH)."
+  echo "🔧 Added $BIN_DIR to PATH for this session."
 fi
-
 echo "📂 Wrapper will be installed to: $BIN_DIR"
 
 # ---------------------------------------------------------------------
@@ -52,12 +48,31 @@ EOF
 chmod +x "$WRAPPER_PATH"
 echo "✅ Wrapper installed at $WRAPPER_PATH"
 
-# Flush the shell’s command cache so “resize” works right now
-command -v hash   &>/dev/null && hash   -r   # bash, zsh
-command -v rehash &>/dev/null && rehash      # tcsh, fish, etc.
+# ---------------------------------------------------------------------
+# 5.  Remove old aliases from shell rc files
+# ---------------------------------------------------------------------
+remove_alias_lines() {
+  local rc_file="$1"
+  if [[ -f "$rc_file" ]]; then
+    # back up once, then strip any line that starts with alias resize=
+    if grep -qE '^alias[[:space:]]+resize=' "$rc_file"; then
+      cp "$rc_file" "$rc_file.bak.magic_resize.$(date +%s)"
+      sed -i '' '/^alias[[:space:]]\+resize=/d' "$rc_file"
+      echo "🧹 Removed old alias from $rc_file"
+    fi
+  fi
+}
+remove_alias_lines "$HOME/.zshrc"
+remove_alias_lines "$HOME/.bashrc"
+remove_alias_lines "$HOME/.bash_profile"
+
+# Remove alias for this running shell (if it exists) and flush cache
+unalias resize 2>/dev/null || true
+command -v hash   &>/dev/null && hash   -r
+command -v rehash &>/dev/null && rehash
 
 # ---------------------------------------------------------------------
-# 5.  Make sure ImageMagick exists (install Homebrew first if needed)
+# 6.  Make sure ImageMagick exists (install Homebrew first if needed)
 # ---------------------------------------------------------------------
 echo "🔍 Checking for ImageMagick (magick/convert)…"
 if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; then
@@ -67,10 +82,9 @@ if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; 
   if ! command -v brew >/dev/null 2>&1; then
     echo "🍺 Homebrew not found – installing…"
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    # Add brew to PATH for this run
-    if [[ "$(uname -m)" == "arm64" ]]; then   # Apple Silicon
+    if [[ "$(uname -m)" == "arm64" ]]; then
       export PATH="/opt/homebrew/bin:$PATH"
-    else                                      # Intel
+    else
       export PATH="/usr/local/bin:$PATH"
     fi
     echo "✅ Homebrew installed."
@@ -86,7 +100,7 @@ else
 fi
 
 # ---------------------------------------------------------------------
-# 6.  Done!
+# 7.  Done!
 # ---------------------------------------------------------------------
 echo ""
 echo "🎉 Setup complete!  You can use the command immediately:"
