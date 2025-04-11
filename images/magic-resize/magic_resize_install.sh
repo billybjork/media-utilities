@@ -103,10 +103,9 @@ fi
 # 7.  Done!
 # ---------------------------------------------------------------------
 echo ""
-echo "🎉 Setup complete!  You can use the command immediately:"
+echo "🎉 Setup complete!  You can use magic-resize with commands like:"
 echo "   resize my_image.jpg"
-echo "   resize --1x1 my_folder/"
-echo ""
-echo "No need to restart or run 'source'. Have fun! 🚀"
+echo "   resize my_folder/"
+echo "   resize --9x16 my_folder/"
 
 exit 0
